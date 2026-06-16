@@ -3,7 +3,7 @@ import json
 from PIL import Image
 
 # 路径配置
-ROOT = "D:/03_code/Yolo-ultralytics/datasets/coco8"
+ROOT = "D:/11_working/202505-animal_fences/coco8"
 OUT = "./datasets/coco8_coco"
 os.makedirs(f"{OUT}/train2017", exist_ok=True)
 os.makedirs(f"{OUT}/val2017", exist_ok=True)
