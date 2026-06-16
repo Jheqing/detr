@@ -390,6 +390,7 @@ def get_world_size():
 
 
 def get_rank():
+    """只在主进程（rank=0 或 单卡模式）返回 True"""
     if not is_dist_avail_and_initialized():
         return 0
     return dist.get_rank()

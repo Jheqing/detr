@@ -311,11 +311,19 @@ def build(args):
     # For more details on this, check the following discussion
     # https://github.com/facebookresearch/detr/issues/108#issuecomment-650269223
     # num_classes = 20 if args.dataset_file != 'coco' else 91
+    """
+    这里的 `num_classes``` 命名有些误导性。  
+    它确实对应于 `max_obj_id + 1`，其中 `max_obj_id` 是您数据集中某个类的最大 ID。
+    例如，COCO 的最大对象 ID 为 90，  
+    因此我们将 `num_classes` 设置为 91。
+    对于具有单个类别且ID为1的数据集，应将`num_classes`设置为2（即max_obj_id + 1）。
+    """
     num_classes = 20 if args.dataset_file != 'coco' else 80
     if args.dataset_file == "coco_panoptic":
         # for panoptic, we just add a num_classes that is large enough to hold
         # max_obj_id + 1, but the exact value doesn't really matter
         num_classes = 250
+    
     device = torch.device(args.device)
 
     backbone = build_backbone(args)

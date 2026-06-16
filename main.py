@@ -30,14 +30,14 @@ def get_args_parser():
 
     # Model parameters
     parser.add_argument('--frozen_weights', type=str, default=None,
-                        help="Path to the pretrained model. If set, only the mask head will be trained")
+                        help="Path to the pretrained model. If set, only the mask head will be trained预训练模型的路径。如果设置，仅训练掩码头")
     # * Backbone
     parser.add_argument('--backbone', default='resnet50', type=str,
                         help="Name of the convolutional backbone to use")
     parser.add_argument('--dilation', action='store_true',
                         help="If true, we replace stride with dilation in the last convolutional block (DC5)")
     parser.add_argument('--position_embedding', default='sine', type=str, choices=('sine', 'learned'),
-                        help="Type of positional embedding to use on top of the image features")
+                        help="Type of positional embedding to use on top of the image features用于图像特征上的位置嵌入类型")
 
     # * Transformer
     parser.add_argument('--enc_layers', default=6, type=int,
@@ -107,7 +107,7 @@ def main(args):
     print("git:\n  {}\n".format(utils.get_sha()))
 
     if args.frozen_weights is not None:
-        assert args.masks, "Frozen training is meant for segmentation only"
+        assert args.masks, "Frozen training is meant for segmentation only 冻结训练仅用于分割"
     print(args)
 
     device = torch.device(args.device)
@@ -118,6 +118,7 @@ def main(args):
     np.random.seed(seed)
     random.seed(seed)
 
+    # 构建模型
     model, criterion, postprocessors = build_model(args)
     model.to(device)
 
