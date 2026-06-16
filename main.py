@@ -5,6 +5,7 @@ import json
 import random
 import time
 from pathlib import Path
+import yaml  # 新增: 导入 yaml 库
 
 import numpy as np
 import torch
@@ -56,7 +57,8 @@ def get_args_parser():
                         help="Number of query slots")
     parser.add_argument('--pre_norm', action='store_true')
 
-    # * Segmentation
+    # * Segmentation 默认关闭，store_true 意味着“只要看到这个参数，就把它设为真”。
+    # 它是一个开关标志（Flag），不需要后面跟具体的值（如 True 或 1）。
     parser.add_argument('--masks', action='store_true',
                         help="Train segmentation head if the flag is provided")
 
@@ -79,9 +81,11 @@ def get_args_parser():
                         help="Relative classification weight of the no-object class")
 
     # dataset parameters
-    parser.add_argument('--dataset_file', default='coco')
+    # 选用了yolo，必须要求提供 yolo_cfg 来确定数据集路径和类别数量（保留向后兼容性可选，但根据需求建议强依赖 cfg）
+    parser.add_argument('--dataset_file', default='coco', help='dataset file, must be one of coco, coco_panoptic, yolo') 
     parser.add_argument('--coco_path', type=str)
     parser.add_argument('--coco_panoptic_path', type=str)
+    parser.add_argument('--yolo_cfg', type=str, default=None, help='Path to YOLO dataset configuration file (e.g., feces.yaml)') # 新增: YOLO 配置文件路径
     parser.add_argument('--remove_difficult', action='store_true')
 
     parser.add_argument('--output_dir', default='',
@@ -108,6 +112,37 @@ def main(args):
 
     if args.frozen_weights is not None:
         assert args.masks, "Frozen training is meant for segmentation only"
+    
+    # 新增: 如果提供了 yolo_cfg，则解析 YAML 并覆盖相关参数
+    if args.yolo_cfg:
+        with open(args.yolo_cfg, 'r') as f:
+            data_config = yaml.safe_load(f)
+        
+        # 1. 设置数据集路径: 必须从 yaml 中获取 path
+        if 'path' in data_config:
+            args.yolo_path = data_config['path']
+        else:
+            # 如果 yaml 没写 path，尝试从 yaml 文件所在目录推断
+            args.yolo_path = str(Path(args.yolo_cfg).parent)
+            
+        # 2. 设置类别数量: 用于模型构建
+        if 'nc' in data_config:
+            args.num_classes = data_config['nc']
+        elif 'names' in data_config:
+            args.num_classes = len(data_config['names'])
+        
+        # 3. 保存类别名称映射 (可选，用于后续推理或日志)
+        if 'names' in data_config:
+            args.class_names = data_config['names']
+        
+        print(f"Loaded YOLO config from {args.yolo_cfg}")
+        print(f"Dataset path: {args.yolo_path}")
+        print(f"Num classes: {args.num_classes}")
+    else:
+        # 如果使用 YOLO 数据集但未提供 cfg，则报错或要求提供 yolo_path (保留向后兼容性可选，但根据需求建议强依赖 cfg)
+        if args.dataset_file == 'yolo':
+             raise ValueError("For YOLO dataset, --yolo_cfg is required to determine dataset path and classes.")
+
     print(args)
 
     device = torch.device(args.device)
@@ -246,3 +281,4 @@ if __name__ == '__main__':
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     main(args)
+    

@@ -1,0 +1,80 @@
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+# train: dataset/train.txt  # train images (relative to 'path') 118287 images
+# val: dataset/val.txt  # train images (relative to 'path') 5000 images
+# test:   # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+
+path: ../datasets/feces
+# 只需要数据集根目录，其中有train.txt和val.txt即可。
+
+
+# Classes
+nc: 62  # number of classes 有多少个类别，就填多少个。
+names: ['1_unknow'
+    , '2_hongxibao'
+    , '3_baixibao'
+    , '4_zhenjun'
+    , '5_nongqiu'
+    , '6_zhifangdi'
+    , '7_shangpi'
+    , '8_dianfenkeli'
+    , '9_caosuangaijiejing'
+    , '10_jushixibao'
+    , '11_linzhibaozi'
+    , '12_ganxichongluan'
+    , '13_huichongluan'
+    , '14_gouchongluan'
+    , '15_naochongluan'
+    , '16_bianchongluan'
+    , '17_taochongluan'
+    , '18_jiangpianchongluan'
+    , '19_xuexichongluan'
+    , '20_dichong'
+    , '21_xiakeleidengjiejing'
+    , '22_feixichongluan'
+    , '23_amiba'
+    , '24_lanshijiadibianmaochong'
+    , '25_renyanangyuanchong'
+    , '26_yinbaozichong'
+    , '27_fenleiyuanxianchong'
+    , '28_xueye'
+    , '29_zhiwuzuzhi'
+    , '30_jiedizuzhi'
+    , '31_jixianwei'
+    , '2301_amiba'
+    , '1702_taochongluan'
+    , '1901_xuexichongluan'
+    , '2302_amiba'
+    , '2303_amiba'
+    , '1703_taochongluan'
+    , '2002_dichong'
+    , '2304_amiba'
+    , '2601_baozichong'
+    , '1706_taochongluan'
+    , '602_zhifangdi'
+    , '603_zhifangdi'
+    , '1704_taochongluan'
+    , '1705_taochongluan'
+    , '1902_xuexichongluan'
+    , '1903_xuexichongluan'
+    , '2001_dichong'
+    , '2101_jiejing'
+    , '2305_amiba'
+    , '2401_lanshijiadibianmaochong'
+    , '2402_lanshijiadibianmaochong'
+    , '2602_baozichong'
+    , '2603_baozichong'
+    , '2604_baozichong'
+    , '2605_baozichong'
+    , '2701_xianchong'
+    , '3201_xianmaochong'
+    , '3500_nianyesi'
+    , '3700_xijun'
+    , '402_zhenjun'
+    , '2608_baozichong'
+    ]
+
+
+
+
+
