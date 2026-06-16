@@ -13,7 +13,10 @@ def get_coco_api_from_dataset(dataset):
         if isinstance(dataset, torch.utils.data.Subset):
             dataset = dataset.dataset
     if isinstance(dataset, torchvision.datasets.CocoDetection):
-        return dataset.coco
+        return dataset.coco # 只有 COCO 数据集才有 .coco 属性
+    # 如果是 YoloDetection，这里没有返回值，默认返回 None
+
+    
 
 
 def build_dataset(image_set, args):

@@ -9,72 +9,100 @@ path: D:/03_code/coco8-yolo/
 
 
 # Classes
-nc: 62  # number of classes 有多少个类别，就填多少个。
-names: ['1_unknow'
-    , '2_hongxibao'
-    , '3_baixibao'
-    , '4_zhenjun'
-    , '5_nongqiu'
-    , '6_zhifangdi'
-    , '7_shangpi'
-    , '8_dianfenkeli'
-    , '9_caosuangaijiejing'
-    , '10_jushixibao'
-    , '11_linzhibaozi'
-    , '12_ganxichongluan'
-    , '13_huichongluan'
-    , '14_gouchongluan'
-    , '15_naochongluan'
-    , '16_bianchongluan'
-    , '17_taochongluan'
-    , '18_jiangpianchongluan'
-    , '19_xuexichongluan'
-    , '20_dichong'
-    , '21_xiakeleidengjiejing'
-    , '22_feixichongluan'
-    , '23_amiba'
-    , '24_lanshijiadibianmaochong'
-    , '25_renyanangyuanchong'
-    , '26_yinbaozichong'
-    , '27_fenleiyuanxianchong'
-    , '28_xueye'
-    , '29_zhiwuzuzhi'
-    , '30_jiedizuzhi'
-    , '31_jixianwei'
-    , '2301_amiba'
-    , '1702_taochongluan'
-    , '1901_xuexichongluan'
-    , '2302_amiba'
-    , '2303_amiba'
-    , '1703_taochongluan'
-    , '2002_dichong'
-    , '2304_amiba'
-    , '2601_baozichong'
-    , '1706_taochongluan'
-    , '602_zhifangdi'
-    , '603_zhifangdi'
-    , '1704_taochongluan'
-    , '1705_taochongluan'
-    , '1902_xuexichongluan'
-    , '1903_xuexichongluan'
-    , '2001_dichong'
-    , '2101_jiejing'
-    , '2305_amiba'
-    , '2401_lanshijiadibianmaochong'
-    , '2402_lanshijiadibianmaochong'
-    , '2602_baozichong'
-    , '2603_baozichong'
-    , '2604_baozichong'
-    , '2605_baozichong'
-    , '2701_xianchong'
-    , '3201_xianmaochong'
-    , '3500_nianyesi'
-    , '3700_xijun'
-    , '402_zhenjun'
-    , '2608_baozichong'
-    ]
+nc: 79  # number of classes 有多少个类别，就填多少个。
+names: [
+  'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+  'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+  'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
+  'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard',
+  'tennis racket', 'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
+  'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+  'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
+  'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear',
+  'hair drier', 'toothbrush'
+]
 
 
-
-
-
+# # ... existing code ...
+# names:
+#   0: person
+#   1: bicycle
+#   2: car
+#   3: motorcycle
+#   4: airplane
+#   5: bus
+#   6: train
+#   7: truck
+#   8: boat
+#   9: traffic light
+#   10: fire hydrant
+#   11: stop sign
+#   12: parking meter
+#   13: bench
+#   14: bird
+#   15: cat
+#   16: dog
+#   17: horse
+#   18: sheep
+#   19: cow
+#   20: elephant
+#   21: bear
+#   22: zebra
+#   23: giraffe
+#   24: backpack
+#   25: umbrella
+#   26: handbag
+#   27: tie
+#   28: suitcase
+#   29: frisbee
+#   30: skis
+#   31: snowboard
+#   32: sports ball
+#   33: kite
+#   34: baseball bat
+#   35: baseball glove
+#   36: skateboard
+#   37: surfboard
+#   38: tennis racket
+#   39: bottle
+#   40: wine glass
+#   41: cup
+#   42: fork
+#   43: knife
+#   44: spoon
+#   45: bowl
+#   46: banana
+#   47: apple
+#   48: sandwich
+#   49: orange
+#   50: broccoli
+#   51: carrot
+#   52: hot dog
+#   53: pizza
+#   54: donut
+#   55: cake
+#   56: chair
+#   57: couch
+#   58: potted plant
+#   59: bed
+#   60: dining table
+#   61: toilet
+#   62: tv
+#   63: laptop
+#   64: mouse
+#   65: remote
+#   66: keyboard
+#   67: cell phone
+#   68: microwave
+#   69: oven
+#   70: toaster
+#   71: sink
+#   72: refrigerator
+#   73: book
+#   74: clock
+#   75: vase
+#   76: scissors
+#   77: teddy bear
+#   78: hair drier
+#   79: toothbrush
+# # ... existing code ...

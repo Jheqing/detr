@@ -115,7 +115,7 @@ def main(args):
     
     # 新增: 如果提供了 yolo_cfg，则解析 YAML 并覆盖相关参数
     if args.yolo_cfg:
-        with open(args.yolo_cfg, 'r') as f:
+        with open(args.yolo_cfg, 'r', encoding='utf-8') as f:
             data_config = yaml.safe_load(f)
         
         # 1. 设置数据集路径: 必须从 yaml 中获取 path
@@ -192,10 +192,18 @@ def main(args):
     data_loader_val = DataLoader(dataset_val, args.batch_size, sampler=sampler_val,
                                  drop_last=False, collate_fn=utils.collate_fn, num_workers=args.num_workers)
 
+    # 修改 base_ds 获取逻辑以支持 YOLO
     if args.dataset_file == "coco_panoptic":
         # We also evaluate AP during panoptic training, on original coco DS
         coco_val = datasets.coco.build("val", args)
         base_ds = get_coco_api_from_dataset(coco_val)
+    elif args.dataset_file == "yolo":
+        # 对于 YOLO 数据集，使用专门的转换函数生成 COCO API 对象
+        from datasets.yolo import get_yolo_coco_api
+        # 假设 args.yolo_path 已经在前面解析好
+        print("Building YOLO COCO API for evaluation...")
+        base_ds = get_yolo_coco_api(args.yolo_path, 'val.txt', getattr(args, 'class_names', None))
+        print(f"Validation dataset size: {len(dataset_val)}")
     else:
         base_ds = get_coco_api_from_dataset(dataset_val)
 
@@ -281,4 +289,3 @@ if __name__ == '__main__':
     if args.output_dir:
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
     main(args)
-    
