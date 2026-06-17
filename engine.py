@@ -23,7 +23,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('class_error', utils.SmoothedValue(window_size=1, fmt='{value:.2f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    # print_freq = 100
+    
     print_freq = 10
 
     for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
@@ -56,12 +56,12 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
         optimizer.step()
 
-        # 修改: 仅更新核心指标到 logger，避免打印所有分项 loss
+        # 仅更新核心指标到 logger，避免打印所有分项 loss
         metric_logger.update(loss=loss_value, class_error=loss_dict_reduced['class_error'])
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+    
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    # print("Averaged stats:",metric_logger)
     print("Averaged stats:", 
           {k: meter.global_avg for k, meter in metric_logger.meters.items() if k in ['loss', 'class_error', 'lr']})
           
@@ -75,11 +75,10 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
 
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('class_error', utils.SmoothedValue(window_size=1, fmt='{value:.2f}'))
-    header = 'Test:'
+    header = 'Val:'
 
     iou_types = tuple(k for k in ('segm', 'bbox') if k in postprocessors.keys())
     coco_evaluator = CocoEvaluator(base_ds, iou_types)
-    # coco_evaluator.coco_eval[iou_types[0]].params.iouThrs = [0, 0.1, 0.5, 0.75]
 
     panoptic_evaluator = None
     if 'panoptic' in postprocessors.keys():
@@ -101,15 +100,14 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
         loss_dict_reduced = utils.reduce_dict(loss_dict)
         loss_dict_reduced_scaled = {k: v * weight_dict[k]
                                     for k, v in loss_dict_reduced.items() if k in weight_dict}
-        loss_dict_reduced_unscaled = {f'{k}_unscaled': v
-                                      for k, v in loss_dict_reduced.items()}
         
-        # 修改: 仅更新核心指标到 logger，避免打印所有分项 loss
+        # 仅更新核心指标到 logger，避免打印所有分项 loss
         metric_logger.update(loss=sum(loss_dict_reduced_scaled.values()),
                              class_error=loss_dict_reduced['class_error'])
 
         orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
         results = postprocessors['bbox'](outputs, orig_target_sizes)
+
         if 'segm' in postprocessors.keys():
             target_sizes = torch.stack([t["size"] for t in targets], dim=0)
             results = postprocessors['segm'](results, outputs, orig_target_sizes, target_sizes)
@@ -129,7 +127,7 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged test stats:", 
+    print("Averaged val stats:", 
           {k: meter.global_avg for k, meter in metric_logger.meters.items() if k in ['loss', 'class_error']})
           
     if coco_evaluator is not None:

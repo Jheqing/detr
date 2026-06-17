@@ -94,9 +94,15 @@ def get_args_parser():
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--resume', default='', help='resume from checkpoint')
-    parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
-                        help='start epoch')
+    parser.add_argument('--start_epoch', default=-1, type=int, metavar='N',
+                        help='start epoch (-1 = auto from checkpoint)')
     parser.add_argument('--eval', action='store_true')
+    
+    # * Fine-tuning with pretrained weights
+    parser.add_argument('--freeze_backbone', action='store_true',
+                        help='Freeze backbone layers when loading pretrained weights')
+    parser.add_argument('--freeze_transformer', action='store_true',
+                        help='Freeze transformer layers when loading pretrained weights')
     parser.add_argument('--num_workers', default=2, type=int)
 
     # distributed training parameters
@@ -104,6 +110,162 @@ def get_args_parser():
                         help='number of distributed processes')
     parser.add_argument('--dist_url', default='env://', help='url used to set up distributed training')
     return parser
+
+
+# COCO 标准类别名称到 ID 的映射 (用于语义重映射)
+COCO_CLASS_NAME_TO_ID = {
+    'person': 1, 'bicycle': 2, 'car': 3, 'motorcycle': 4, 'airplane': 5,
+    'bus': 6, 'train': 7, 'truck': 8, 'boat': 9, 'traffic light': 10,
+    'fire hydrant': 11, 'stop sign': 13, 'parking meter': 14, 'bench': 15,
+    'bird': 16, 'cat': 17, 'dog': 18, 'horse': 19, 'sheep': 20, 'cow': 21,
+    'elephant': 22, 'bear': 23, 'zebra': 24, 'giraffe': 25, 'backpack': 27,
+    'umbrella': 28, 'handbag': 31, 'tie': 32, 'suitcase': 33, 'frisbee': 34,
+    'skis': 35, 'snowboard': 36, 'sports ball': 37, 'kite': 38,
+    'baseball bat': 39, 'baseball glove': 40, 'skateboard': 41,
+    'surfboard': 42, 'tennis racket': 43, 'bottle': 44, 'wine glass': 46,
+    'cup': 47, 'fork': 48, 'knife': 49, 'spoon': 50, 'bowl': 51,
+    'banana': 52, 'apple': 53, 'sandwich': 54, 'orange': 55, 'broccoli': 56,
+    'carrot': 57, 'hot dog': 58, 'pizza': 59, 'donut': 60, 'cake': 61,
+    'chair': 62, 'couch': 63, 'potted plant': 64, 'bed': 65,
+    'dining table': 67, 'toilet': 70, 'tv': 72, 'laptop': 73, 'mouse': 74,
+    'remote': 75, 'keyboard': 76, 'cell phone': 77, 'microwave': 78,
+    'oven': 79, 'toaster': 80, 'sink': 81, 'refrigerator': 82,
+    'book': 84, 'clock': 85, 'vase': 86, 'scissors': 87, 'teddy bear': 88,
+    'hair drier': 89, 'toothbrush': 90,
+}
+
+
+def adapt_pretrained_class_embed(pretrained_state_dict, num_classes,
+                                  hidden_dim=256, class_names=None):
+    """
+    自适应适配预训练权重的 class_embed 层，使其匹配目标 num_classes。
+    
+    预训练模型通常有 pretrained_nc 个类别，class_embed 输出维度 = pretrained_nc + 1。
+    目标模型有 num_classes 个类别，class_embed 输出维度 = num_classes + 1。
+    
+    智能映射策略：
+    1. 如果提供了 class_names 且与 COCO 标准类别名匹配 → 按语义重映射（确保"人"对应"人"）
+    2. 否则按简单截断/扩展策略
+    
+    三种场景：
+    a. pretrained_nc == num_classes → 直接匹配
+    b. pretrained_nc >  num_classes → 语义重映射（优先）或截断
+    c. pretrained_nc <  num_classes → 语义重映射（优先）或扩展+随机初始化
+    
+    返回：
+        修改后的 state_dict（class_embed 部分已适配）
+        pretrained_nc: 预训练模型的类别数
+    """
+    weight_key = 'class_embed.weight'
+    bias_key = 'class_embed.bias'
+    
+    pretrained_weight = pretrained_state_dict[weight_key]  # [pretrained_nc+1, hidden_dim]
+    pretrained_bias = pretrained_state_dict[bias_key]      # [pretrained_nc+1]
+    
+    pretrained_nc = pretrained_weight.shape[0] - 1         # 预训练类别数
+    target_out_dim = num_classes + 1                        # 目标输出维度
+    
+    hidden_dim_actual = pretrained_weight.shape[1]
+    assert hidden_dim_actual == hidden_dim, \
+        f"Hidden dim mismatch: pretrained={hidden_dim_actual}, expected={hidden_dim}"
+    
+    if pretrained_nc == num_classes:
+        print(f"[Adapt] num_classes matches ({num_classes}), using pretrained class_embed as-is.")
+        return pretrained_state_dict, pretrained_nc
+    
+    # ─── 尝试构建语义重映射 ───
+    semantic_map = None  # target_class_idx → pretrained_class_idx
+    if class_names is not None and len(class_names) == num_classes:
+        semantic_map = _build_semantic_class_map(class_names, pretrained_nc)
+    
+    # ─── 构建新的 weight/bias ───
+    new_weight = torch.zeros(target_out_dim, hidden_dim_actual)
+    new_bias = torch.zeros(target_out_dim)
+    
+    if semantic_map is not None:
+        # ── 语义重映射模式 ──
+        mapped_count = 0
+        random_count = 0
+        
+        for tgt_idx, src_idx in semantic_map.items():
+            if tgt_idx < num_classes and src_idx < pretrained_nc:
+                new_weight[tgt_idx, :] = pretrained_weight[src_idx, :]
+                new_bias[tgt_idx] = pretrained_bias[src_idx]
+                mapped_count += 1
+        
+        # 未匹配的类别 → 随机初始化
+        for i in range(num_classes):
+            if i not in semantic_map:
+                torch.nn.init.xavier_uniform_(new_weight[i:i+1, :])
+                random_count += 1
+        
+        # 背景类（最后一维）从预训练最后一维复制
+        new_weight[-1, :] = pretrained_weight[-1, :]
+        new_bias[-1] = pretrained_bias[-1]
+        
+        print(f"[Adapt] Semantic remapping: {pretrained_nc} → {num_classes} "
+              f"(matched: {mapped_count}, random_init: {random_count})")
+    
+    elif pretrained_nc > num_classes:
+        # ── 简单截断模式（无 class_names 回退） ──
+        new_weight[:num_classes, :] = pretrained_weight[:num_classes, :]
+        new_bias[:num_classes] = pretrained_bias[:num_classes]
+        new_weight[-1, :] = pretrained_weight[-1, :]
+        new_bias[-1] = pretrained_bias[-1]
+        
+        print(f"[Adapt] Truncating class_embed: {pretrained_nc} → {num_classes} "
+              f"(discarded classes {num_classes}~{pretrained_nc-1}) "
+              f"[WARNING: no class_names provided, simple truncation may misalign classes!]")
+    
+    else:  # pretrained_nc < num_classes
+        # ── 简单扩展模式（无 class_names 回退） ──
+        new_weight[:pretrained_nc, :] = pretrained_weight[:pretrained_nc, :]
+        new_bias[:pretrained_nc] = pretrained_bias[:pretrained_nc]
+        torch.nn.init.xavier_uniform_(new_weight[pretrained_nc:num_classes, :])
+        new_weight[-1, :] = pretrained_weight[-1, :]
+        new_bias[-1] = pretrained_bias[-1]
+        
+        print(f"[Adapt] Expanding class_embed: {pretrained_nc} → {num_classes} "
+              f"(random init for new classes {pretrained_nc}~{num_classes-1})")
+    
+    # 替换 state_dict 中的 class_embed
+    pretrained_state_dict[weight_key] = new_weight
+    pretrained_state_dict[bias_key] = new_bias
+    
+    return pretrained_state_dict, pretrained_nc
+
+
+def _build_semantic_class_map(class_names, pretrained_nc):
+    """
+    根据类别名称构建目标类别索引 → 预训练类别索引的映射。
+    
+    例如 COCO128 的 class_names=['person','bicycle',...] → COCO IDs [1,2,...]
+    target_class_0 ('person') → 预训练 class_embed 索引 1 (COCO person)
+    """
+    name_map = {}
+    no_match = 0
+    
+    for tgt_idx, name in enumerate(class_names):
+        # 标准化名称（去除前后空格、转小写）
+        name_clean = str(name).strip().lower() if not isinstance(name, str) else name.strip().lower()
+        coco_id = COCO_CLASS_NAME_TO_ID.get(name_clean) or COCO_CLASS_NAME_TO_ID.get(name)
+        
+        if coco_id is not None and coco_id <= pretrained_nc:
+            name_map[tgt_idx] = coco_id  # target_class_idx → pretrained_class_embed_idx
+        else:
+            no_match += 1
+    
+    if no_match == len(class_names):
+        # 全部无法匹配 → 回退到截断/扩展，不使用语义映射
+        print(f"[Adapt] No class names matched COCO vocabulary (tried {len(class_names)} names). "
+              f"Using simple truncation/expansion instead.")
+        return None
+    
+    if no_match > 0:
+        print(f"[Adapt] {no_match}/{len(class_names)} class names could not be mapped to COCO IDs. "
+              f"These classes will be randomly initialized.")
+    
+    return name_map
 
 
 def main(args):
@@ -212,17 +374,95 @@ def main(args):
         model_without_ddp.detr.load_state_dict(checkpoint['model'])
 
     output_dir = Path(args.output_dir)
+    
+    # ═══════════════════════════════════════════════════════════════
+    # 预训练权重加载：自适应 class_embed + 可选冻结
+    # ═══════════════════════════════════════════════════════════════
     if args.resume:
+        # ---- Step 1: 加载预训练权重文件 ----
         if args.resume.startswith('https'):
             checkpoint = torch.hub.load_state_dict_from_url(
                 args.resume, map_location='cpu', check_hash=True)
         else:
             checkpoint = torch.load(args.resume, map_location='cpu')
-        model_without_ddp.load_state_dict(checkpoint['model'])
-        if not args.eval and 'optimizer' in checkpoint and 'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
-            optimizer.load_state_dict(checkpoint['optimizer'])
-            lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-            args.start_epoch = checkpoint['epoch'] + 1
+        
+        pretrained_state = checkpoint['model']
+        
+        # ---- Step 2: 获取目标的 num_classes 与 class_names ----
+        # num_classes 在 build_model 中已确定，这里直接取模型 class_embed 的维度
+        target_num_classes = model_without_ddp.class_embed.out_features - 1
+        
+        # 提取 class_names（用于语义重映射）
+        yolo_class_names = getattr(args, 'class_names', None)
+        if yolo_class_names is not None:
+            if isinstance(yolo_class_names, dict):
+                yolo_class_names = [yolo_class_names[k] for k in sorted(yolo_class_names.keys())]
+            elif isinstance(yolo_class_names, list):
+                yolo_class_names = list(yolo_class_names)
+        
+        # ---- Step 3: 自适应适配 class_embed ----
+        print('=' * 60)
+        print('[Fine-tuning] Adaptive class_embed loading')
+        print(f'  Target num_classes: {target_num_classes}')
+        adapted_state, pretrained_nc = adapt_pretrained_class_embed(
+            pretrained_state, target_num_classes,
+            hidden_dim=args.hidden_dim,
+            class_names=yolo_class_names,
+        )
+        
+        # ---- Step 4: 加载权重（现在 class_embed 形状已匹配） ----
+        missing, unexpected = model_without_ddp.load_state_dict(adapted_state, strict=False)
+        if missing:
+            print(f'  ⚠️  Missing keys: {missing}')
+        if unexpected:
+            print(f'  ⚠️  Unexpected keys: {unexpected}')
+        
+        # ---- Step 5: 可选冻结 ----
+        freeze_info = []
+        total_frozen = 0
+        total_trainable = 0
+        
+        if args.freeze_backbone:
+            for name, param in model_without_ddp.named_parameters():
+                if name.startswith('backbone'):
+                    param.requires_grad = False
+                    total_frozen += param.numel()
+            freeze_info.append('backbone')
+        
+        if args.freeze_transformer:
+            for name, param in model_without_ddp.named_parameters():
+                if name.startswith('transformer') or name.startswith('input_proj'):
+                    param.requires_grad = False
+                    total_frozen += param.numel()
+            freeze_info.append('transformer+input_proj')
+        
+        # 统计
+        for name, param in model_without_ddp.named_parameters():
+            if param.requires_grad:
+                total_trainable += param.numel()
+        
+        if freeze_info:
+            print(f'  ❄️  Frozen: {", ".join(freeze_info)}')
+        print(f'  📊 Trainable params: {total_trainable:,} / '
+              f'{total_frozen + total_trainable:,} '
+              f'({100 * total_trainable / (total_frozen + total_trainable):.1f}%)')
+        print('=' * 60)
+
+        # ---- Step 6: 恢复训练状态（可选） ----
+        # 只有用户没有显式指定 --start_epoch 时，才从 checkpoint 恢复
+        if args.start_epoch < 0:
+            if not args.eval and 'optimizer' in checkpoint and \
+               'lr_scheduler' in checkpoint and 'epoch' in checkpoint:
+                optimizer.load_state_dict(checkpoint['optimizer'])
+                lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+                args.start_epoch = checkpoint['epoch'] + 1
+                print(f'  🔄 Resumed from epoch {args.start_epoch}')
+            else:
+                args.start_epoch = 0
+        else:
+            # 用户显式指定了 --start_epoch，跳过 optimizer/lr 状态恢复
+            print(f'  🎯 User specified start_epoch={args.start_epoch}, '
+                  f'optimizer/lr_scheduler state NOT restored')
 
     if args.eval:
         test_stats, coco_evaluator = evaluate(model, criterion, postprocessors,
@@ -230,6 +470,10 @@ def main(args):
         if args.output_dir:
             utils.save_on_master(coco_evaluator.coco_eval["bbox"].eval, output_dir / "eval.pth")
         return
+
+    # 如果 start_epoch 仍为 -1（未 resume 也未显式指定），则从 0 开始
+    if args.start_epoch < 0:
+        args.start_epoch = 0
 
     print("Start training")
     start_time = time.time()
@@ -259,7 +503,7 @@ def main(args):
         )
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
-                     **{f'test_{k}': v for k, v in test_stats.items()},
+                     **{f'val_{k}': v for k, v in test_stats.items()},
                      'epoch': epoch,
                      'n_parameters': n_parameters}
 

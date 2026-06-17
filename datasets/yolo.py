@@ -345,7 +345,7 @@ def get_yolo_coco_api(root_path, list_file_name, class_names=None):
         except Exception:
             label_path = img_full_path.with_suffix('.txt')
 
-        print(f"Processing image {img_full_path}, looking for label {label_path}")
+        # print(f"Processing image {img_full_path}, looking for label {label_path}")
         if label_path.exists():
             with open(label_path, 'r', encoding='utf-8') as f:
                 for line in f.readlines():
